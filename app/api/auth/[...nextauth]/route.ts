@@ -9,9 +9,14 @@ import { configureStore, createSlice } from "@reduxjs/toolkit";
 declare module "next-auth" {
   interface Session {
     user: {
-      id: string;
+      id: number; // Changed id type to number
       role: string;
     } & DefaultSession["user"];
+  }
+
+  interface User {
+    id: number; // Changed id type to number
+    role: string;
   }
 }
 
@@ -22,7 +27,7 @@ const authSlice = createSlice({
     user: null,
   },
   reducers: {
-    setUser(state: { user: any }, action: { payload: any }) {
+    setUser(state: { user: any }, action: { payload: { id: number; role: string; name: string; email: string } }) {
       state.user = action.payload;
     },
     clearUser(state: { user: any }) {
@@ -54,37 +59,32 @@ export const authOptions: AuthOptions = {
         }
 
         const { email, password } = credentials;
-
         const user = await prisma.user.findUnique({ where: { email } });
-        if (!user) {
-          throw new Error("No user found with this email");
+
+        if (!user || !(await bcrypt.compare(password, user.password))) {
+          throw new Error("Invalid email or password");
         }
 
-        const isValidPassword = await bcrypt.compare(password, user.password);
-        if (!isValidPassword) {
-          throw new Error("Invalid password");
-        }
-
-        return { id: user.id, name: user.name, email: user.email, role: user.role };
+        return {
+          id: Number(user.id), // Ensure id is treated as a number
+          name: user.name,
+          email: user.email,
+          role: user.role,
+        };
       },
     }),
   ],
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
-        token.id = user.id;
-        token.role = user.role; // Use roles as stored in the database
+        token.id = user.id.toString(); // Convert user.id to string
+        token.role = user.role;
       }
       return token;
     },
     async session({ session, token }) {
-      // Use Redux Toolkit storage instead of session
-      store.dispatch(setUser({
-        id: token.id,
-        role: token.role, // Use roles as stored in the database
-        name: session.user?.name,
-        email: session.user?.email,
-      }));
+      session.user.id = Number(token.id); // Ensure id is treated as a number
+      session.user.role = token.role;
       return session;
     },
   },

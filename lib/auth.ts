@@ -1,5 +1,65 @@
 import NextAuth from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
+import { configureStore, createSlice } from "@reduxjs/toolkit";
+import jwt from "jsonwebtoken";
+import prisma from "./prisma";
+import bcrypt from "bcrypt";
+
+interface User {
+  id: number; // Changed id type to number
+  role: string;
+  name: string;
+  email: string;
+}
+
+// Create a slice for user authentication
+const authSlice = createSlice({
+  name: "auth",
+  initialState: {
+    user: null as User | null,
+  },
+  reducers: {
+    setUser(state, action: { payload: User }) {
+      state.user = action.payload;
+    },
+    clearUser(state) {
+      state.user = null;
+    },
+  },
+});
+
+export const { setUser, clearUser } = authSlice.actions;
+
+// Configure the Redux store
+export const store = configureStore({
+  reducer: {
+    auth: authSlice.reducer,
+  },
+});
+
+async function getUserFromToken(token: string) {
+  try {
+    const decodedToken = jwt.verify(token, process.env.NEXTAUTH_SECRET || "default_secret") as { id: string };
+    const user = await prisma.user.findUnique({ where: { id: Number(decodedToken.id) } });
+
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    // Update Redux store with user details
+    store.dispatch(setUser({
+      id: user.id,
+      role: user.role,
+      name: user.name,
+      email: user.email,
+    }));
+
+    return user;
+  } catch (error) {
+    console.error("Error fetching user from token:", error);
+    throw new Error("Invalid token");
+  }
+}
 
 export const { handlers, auth } = NextAuth({
   providers: [
@@ -10,19 +70,24 @@ export const { handlers, auth } = NextAuth({
         password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
-        // Implement your user authentication logic here
-        // For example, validate the user with your database
         if (!credentials) {
           throw new Error("Missing credentials");
         }
 
         const { email, password } = credentials;
-        // Replace this with your actual user lookup logic
-        const user = { id: "1", name: "Test User", email, role: "Instructor" };
+        const user = await prisma.user.findUnique({ where: { email } });
 
-        if (!user) {
+        if (!user || !(await bcrypt.compare(password, user.password))) {
           throw new Error("Invalid email or password");
         }
+
+        // Update Redux store with user details
+        store.dispatch(setUser({
+          id: user.id,
+          role: user.role,
+          name: user.name,
+          email: user.email,
+        }));
 
         return user;
       },
@@ -31,14 +96,17 @@ export const { handlers, auth } = NextAuth({
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
-        token.id = user.id;
+        token.id = user.id.toString();
         token.role = user.role;
       }
       return token;
     },
     async session({ session, token }) {
-      session.user.id = token.id as string;
-      session.user.role = token.role as string;
+      const user = await getUserFromToken(token.id);
+      session.user.id = user.id;
+      session.user.role = user.role;
+      session.user.name = user.name;
+      session.user.email = user.email;
       return session;
     },
   },
