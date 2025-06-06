@@ -7,19 +7,14 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum Role {
-  Student
-  Instructor
-}
-
 model User {
-  id           Int           @id @default(autoincrement())
   email        String        @unique
   password     String
   name         String
-  role         Role
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
+  role         Role
+  id           Int           @id @default(autoincrement())
   certificates Certificate[] @relation("CertificateUser")
   courses      Course[]      @relation("InstructorCourses")
   enrollments  Enrollment[]
@@ -27,76 +22,114 @@ model User {
 }
 
 model Course {
-  id           Int           @id @default(autoincrement())
   title        String
   description  String
-  instructorId Int           // Changed to Int
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
+  thumbnail    String?
+  id           Int           @id @default(autoincrement())
+  instructorId Int
   assignments  Assignment[]  @relation("AssignmentCourse")
   certificates Certificate[]
   instructor   User          @relation("InstructorCourses", fields: [instructorId], references: [id])
   enrollments  Enrollment[]
   forumPosts   ForumPost[]
   modules      Module[]
-  thumbnail    String?       // Optional field for course thumbnail
 }
 
 model Module {
-  id        Int      @id @default(autoincrement())
-  title     String
-  courseId  Int
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  lessons   Lesson[]
-  course    Course   @relation(fields: [courseId], references: [id])
+  title       String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  id          Int      @id @default(autoincrement())
+  courseId    Int
+  description String
+  lessons     Lesson[]
+  course      Course   @relation(fields: [courseId], references: [id])
 }
 
 model Lesson {
-  id        Int      @id @default(autoincrement())
   title     String
-  content   String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  id        Int       @id @default(autoincrement())
   moduleId  Int
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  module    Module   @relation(fields: [moduleId], references: [id])
+  duration  String
+  document  Document?
+  module    Module    @relation(fields: [moduleId], references: [id])
+  pdf       PDF?
+  quiz      Quiz?
+  video     Video?
 }
 
 model Assignment {
-  id        Int      @id @default(autoincrement())
   title     String
   content   String
-  courseId  Int
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  id        Int      @id @default(autoincrement())
+  courseId  Int
   course    Course   @relation("AssignmentCourse", fields: [courseId], references: [id])
 }
 
 model Certificate {
+  issuedAt DateTime @default(now())
   id       Int      @id @default(autoincrement())
   userId   Int
   courseId Int
-  issuedAt DateTime @default(now())
   course   Course   @relation(fields: [courseId], references: [id])
   user     User     @relation("CertificateUser", fields: [userId], references: [id])
 }
 
 model ForumPost {
-  id        Int      @id @default(autoincrement())
   content   String
-  userId    Int
-  courseId  Int
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  courseId  Int
   course    Course   @relation(fields: [courseId], references: [id])
   user      User     @relation("ForumPostUser", fields: [userId], references: [id])
 }
 
 model Enrollment {
+  createdAt DateTime @default(now())
   id        Int      @id @default(autoincrement())
   userId    Int
   courseId  Int
-  createdAt DateTime @default(now())
   course    Course   @relation(fields: [courseId], references: [id])
   user      User     @relation(fields: [userId], references: [id])
+}
+
+model Video {
+  id       Int    @id @default(autoincrement())
+  url      String
+  lessonId Int    @unique
+  lesson   Lesson @relation(fields: [lessonId], references: [id])
+}
+
+model PDF {
+  id       Int    @id @default(autoincrement())
+  url      String
+  lessonId Int    @unique
+  lesson   Lesson @relation(fields: [lessonId], references: [id])
+}
+
+model Document {
+  id       Int    @id @default(autoincrement())
+  url      String
+  lessonId Int    @unique
+  lesson   Lesson @relation(fields: [lessonId], references: [id])
+}
+
+model Quiz {
+  id        Int    @id @default(autoincrement())
+  questions Json
+  lessonId  Int    @unique
+  lesson    Lesson @relation(fields: [lessonId], references: [id])
+}
+
+enum Role {
+  Student
+  Instructor
 }
