@@ -4,6 +4,7 @@ import prisma from "../../../../lib/prisma";
 import bcrypt from "bcrypt";
 import { NextApiRequest, NextApiResponse } from "next";
 import { Session, DefaultSession } from "next-auth";
+import { configureStore, createSlice } from "@reduxjs/toolkit";
 
 declare module "next-auth" {
   interface Session {
@@ -13,6 +14,31 @@ declare module "next-auth" {
     } & DefaultSession["user"];
   }
 }
+
+// Create a slice for user authentication
+const authSlice = createSlice({
+  name: "auth",
+  initialState: {
+    user: null,
+  },
+  reducers: {
+    setUser(state: { user: any }, action: { payload: any }) {
+      state.user = action.payload;
+    },
+    clearUser(state: { user: any }) {
+      state.user = null;
+    },
+  },
+});
+
+export const { setUser, clearUser } = authSlice.actions;
+
+// Configure the Redux store
+export const store = configureStore({
+  reducer: {
+    auth: authSlice.reducer,
+  },
+});
 
 export const authOptions: AuthOptions = {
   providers: [
@@ -44,20 +70,22 @@ export const authOptions: AuthOptions = {
     }),
   ],
   callbacks: {
-    async session({ session, token }) {
-      session.user = {
-        ...session.user, // Preserve existing fields like name, email, image
-        id: token.id as string, // Ensure `id` is included in the session
-        role: token.role as string, // Ensure `role` is included in the session
-      };
-      return session;
-    },
     async jwt({ token, user }) {
       if (user) {
-        token.id = user.id; // Ensure `id` is included in the token
-        token.role = user.role; // Ensure `role` is included in the token
+        token.id = user.id;
+        token.role = user.role; // Use roles as stored in the database
       }
       return token;
+    },
+    async session({ session, token }) {
+      // Use Redux Toolkit storage instead of session
+      store.dispatch(setUser({
+        id: token.id,
+        role: token.role, // Use roles as stored in the database
+        name: session.user?.name,
+        email: session.user?.email,
+      }));
+      return session;
     },
   },
 };
