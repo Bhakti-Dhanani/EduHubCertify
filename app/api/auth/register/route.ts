@@ -10,7 +10,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
-    if (!["Student", "Instructor"].includes(role)) {
+    const normalizedRole = role.toUpperCase();
+
+    if (!["STUDENT", "INSTRUCTOR"].includes(normalizedRole)) {
       return NextResponse.json({ error: "Invalid role" }, { status: 400 });
     }
 
@@ -26,7 +28,7 @@ export async function POST(request: Request) {
         email,
         password: hashedPassword,
         name,
-        role,
+        role: normalizedRole,
       },
     });
 
