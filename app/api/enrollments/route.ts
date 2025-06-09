@@ -73,6 +73,45 @@ export async function POST(req: NextRequest) {
 /** GET /api/enrollments */
 export async function GET(req: NextRequest) {
   try {
+    const url = new URL(req.url);
+    const pathSegments = url.pathname.split("/");
+    const isUserRoute = pathSegments.includes("user");
+
+    console.log("Request URL:", req.url);
+    console.log("Path Segments:", pathSegments);
+    console.log("Is User Route:", isUserRoute);
+
+    if (isUserRoute) {
+      const authHeader = req.headers.get("Authorization");
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
+      }
+
+      const tokenString = authHeader.split(" ")[1];
+      const token = jwt.verify(tokenString, secret);
+
+      if (!token || typeof token !== "object" || !("id" in token)) {
+        return NextResponse.json({ error: "Invalid token." }, { status: 401 });
+      }
+
+      const userId = token.id;
+
+      const enrollments = await prisma.enrollment.findMany({
+        where: { userId },
+        include: { course: true },
+      });
+
+      if (!enrollments || enrollments.length === 0) {
+        return NextResponse.json({ error: "No enrollments found for the user." }, { status: 404 });
+      }
+
+      return NextResponse.json({
+        message: "Enrollments fetched successfully",
+        enrollments,
+      });
+    }
+
+    // Handle other GET requests
     const authHeader = req.headers.get("Authorization");
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
       return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
@@ -101,42 +140,6 @@ export async function GET(req: NextRequest) {
     });
   } catch (error: any) {
     console.error("Error fetching enrollments:", error);
-    return NextResponse.json({ error: error.message || "Unexpected error." }, { status: 500 });
-  }
-}
-
-/** GET /api/enrollments/user */
-export async function GET_BY_USER(req: NextRequest) {
-  try {
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
-    }
-
-    const tokenString = authHeader.split(" ")[1];
-    const token = jwt.verify(tokenString, secret);
-
-    if (!token || typeof token !== "object" || !('id' in token)) {
-      return NextResponse.json({ error: "Invalid token." }, { status: 401 });
-    }
-
-    const userId = token.id;
-
-    const enrollments = await prisma.enrollment.findMany({
-      where: { userId },
-      include: { course: true },
-    });
-
-    if (!enrollments || enrollments.length === 0) {
-      return NextResponse.json({ error: "No enrollments found for the user." }, { status: 404 });
-    }
-
-    return NextResponse.json({
-      message: "Enrollments fetched successfully",
-      enrollments,
-    });
-  } catch (error: any) {
-    console.error("Error fetching enrollments for user:", error);
     return NextResponse.json({ error: error.message || "Unexpected error." }, { status: 500 });
   }
 }
